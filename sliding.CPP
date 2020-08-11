@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include <chrono> 
+#include <climits>
 using namespace std;
 map<vector<vector<int> >,bool> visited;
 map<vector<vector<int> >, vector<vector<int> > > parent;
@@ -44,9 +46,29 @@ int manhattan_distance(vector<vector<int> > matrix,vector<vector<int> > target){
     return total_distance;
 }
 vector<vector<int> > move(vector<vector<int> > matrix, position initial, position final){
-    swap(matrix[initial.x][initial.y],matrix[final.x][final.y]);
+    if(final.x==initial.x){
+        if(final.y>initial.y){
+             for(int i = initial.y;i<final.y;i++)
+                swap(matrix[initial.x][i],matrix[initial.x][i+1]);
+        }
+        else{
+            for(int i = initial.y;i>final.y;i--)    
+             swap(matrix[initial.x][i],matrix[initial.x][i-1]);
+        }
+    }
+    else{
+        if(final.x>initial.x){
+            for(int i = initial.x;i<final.x;i++)
+                swap(matrix[i][initial.y],matrix[i+1][initial.y]);
+        }
+        else{
+            for(int i = initial.x;i>final.x;i--)
+                swap(matrix[i][initial.y],matrix[i-1][initial.y]);
+        }
+    }
     return matrix;
 }
+
 position get_currentpos(vector<vector<int> > matrix){
     position pos;
     int rows = matrix.size(), columns = matrix[0].size();
@@ -72,10 +94,16 @@ int print(vector<vector<int> > matrix){
 
 int astar(vector<vector<int> > start, vector<vector<int> > target){
     set<pair<int, vector<vector<int> > > >  nodes;
-   
+       int rows = target.size(), columns = target[0].size();
     nodes.insert(make_pair(manhattan_distance(start,target),start));
-    int distx[] = {0,0,1,-1}, disty[] = {1,-1,0,0};
-    int rows = target.size(), columns = target[0].size();
+    vector<int> distx, disty ;
+    for(int i = 1;i<max(rows,columns);i++){
+        for(int j = 0;j<4;j++){ 
+            if(j<2){ distx.push_back(0); disty.push_back(i*(-1 + 2*(j%2==0)));}
+            else{disty.push_back(0); distx.push_back(i*(-1 + 2*(j%2==0))); }
+        }
+    }
+    
     map<position,bool,compare_pos> allowed;
     for(int i = 0;i<rows;i++) for(int j = 0;j<columns;j++) allowed[ret_pos(i,j)] = true;
   
@@ -83,16 +111,18 @@ int astar(vector<vector<int> > start, vector<vector<int> > target){
     while(!nodes.empty()){
         while(visited[nodes.begin()->second]&&!nodes.empty()) nodes.erase(nodes.begin());
         vector<vector<int> > temp = nodes.begin()->second;
+        nodes.erase(nodes.begin());
         position you = get_currentpos(temp);
         visited[temp] = true;
-        for(int d = 0;d<4;d++){
+        for(int d = 0;d<distx.size();d++){
             position change;
             change.x = you.x + distx[d];
             change.y = you.y + disty[d];
-            if(!allowed[change]) continue;
+            if(!allowed[change]) continue; 
             vector<vector<int> > new_move = move(temp,you,change);
             if(visited[new_move]) continue;
-            nodes.insert(make_pair(manhattan_distance(new_move,target)+1,new_move));
+        
+            nodes.insert(make_pair(manhattan_distance(new_move,target)+max(abs(distx[d]),abs(disty[d])),new_move));
             parent[new_move] = temp;
             if(manhattan_distance(new_move,target)==0){
                 return 1;
@@ -118,6 +148,14 @@ int print_all(vector<vector<int> > start, vector<vector<int> > child){
     print(child);
     return 0;
 }
+int calculate_time(vector<vector<int> > start, vector<vector<int> > target){
+    auto start_time = chrono::high_resolution_clock::now();
+    astar(start,target);
+    auto end_time = chrono::high_resolution_clock::now();
+    auto duration = chrono::duration_cast<chrono::microseconds>(end_time-start_time).count();
+    cout << duration;
+    exit(0);
+}
 int main(){
     vector< vector<int> > start, target;
     int n,m;
@@ -135,15 +173,19 @@ int main(){
             cin >> target[i][j];
         }
     }
-    
-   if(astar(start,target)==1){
-       cout <<"FOUND!";
-          print_all(start,target);
-   }
-   else cout <<"NOT FOUND!";
+   //calculate_time(start,target);
+    if(astar(start,target)==1){
+        cout <<"FOUND!";
+        print_all(start,target);
+    }
+    else cout <<"NOT FOUND!";
     return 0;
 }
-// Sample input 1 :
+//Look ahead : 1 move
+//Time Taken : 4x4 = 28~ seconds(Input 1), 4x4 = 0.4 seconds (Input 3), 3x3 = 0.008437 seconds(input 2)
+//Look ahead : max (rows,columns) moves;
+//Time Taken : 4x4 = 2.5~ seconds(Input 1), 4x4 = 0.4~ seconds (Input 3), 3x3 = 0.01 seconds(Input 2)
+// Sample Input 1 :
 // 4 4
 // 6 12 1 3
 // 5 8 4 15
@@ -162,3 +204,15 @@ int main(){
 // 1 2 3 
 // 4 5 6
 // 7 8 0
+
+// Sample Input 3 : 
+// 4 4
+// 1 2 6 3
+// 4 9 5 7
+// 8 13 11 15
+// 12 14 0 10
+// 0 1 2 3
+// 4 5 6 7
+// 8 9 10 11
+// 12 13 14 15
+
