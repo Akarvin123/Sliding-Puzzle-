@@ -6,8 +6,11 @@
 #include <chrono> 
 #include <climits>
 using namespace std;
+//visited - map : Takes care of all the expanded states
 map<vector<vector<int> >,bool> visited;
-map<vector<vector<int> >, vector<vector<int> > > parent;
+//Parent - map; Stores the parent of each and every state, Used in ---> printing all the moves that led to the solution[solved state]
+map<vector<vector<int> >, vector<vector<int> > > parent; 
+//position of a cell in (x,y) coordinates
 struct position{
     int x,y;
 };
@@ -17,16 +20,20 @@ position ret_pos(int x,int y){
     ret.y = y;
     return ret;
 }
+//modified comparator function for map<position,[any type]>
 struct compare_pos{
     bool operator()(const position& a, const position& b) const {
         if(a.x == b.x) return a.y < b.y;
         return a.x < b.x;
     }
 };
-int calculate_distance(position p,position q){
+//Formula for calculating manhattan distance between two (x,y) co-ordinates
+int manhattan_distance(position p,position q){
     return (abs(p.x-q.x) + abs(p.y-q.y));
 }
-int manhattan_distance(vector<vector<int> > matrix,vector<vector<int> > target){
+//Sum Of manhattan_distance of all cells
+//Manhattan_distance of a cell, is no. of moves it has to make to reach its goal state.
+int calculate_distance(vector<vector<int> > matrix,vector<vector<int> > target){
     int rows = matrix.size(), columns = matrix[0].size();
     map<int,position> required_position;
     for(int i = 0;i<rows;i++){
@@ -39,12 +46,14 @@ int manhattan_distance(vector<vector<int> > matrix,vector<vector<int> > target){
         for(int j = 0;j<columns;j++){
             position pos = ret_pos(i,j);
             position target_pos = required_position[matrix[i][j]];
-            total_distance += calculate_distance(pos,target_pos);
+            total_distance += manhattan_distance(pos,target_pos);
            
         }
     }
     return total_distance;
 }
+//Given initial and final position, move the "empty" cell from its initial position to final position
+//Returns the modified matrix
 vector<vector<int> > move(vector<vector<int> > matrix, position initial, position final){
     if(final.x==initial.x){
         if(final.y>initial.y){
@@ -68,7 +77,7 @@ vector<vector<int> > move(vector<vector<int> > matrix, position initial, positio
     }
     return matrix;
 }
-
+//Returns the position of the empty cell in a matrix;
 position get_currentpos(vector<vector<int> > matrix){
     position pos;
     int rows = matrix.size(), columns = matrix[0].size();
@@ -81,6 +90,7 @@ position get_currentpos(vector<vector<int> > matrix){
     }
     return pos;
 }
+//Prints the matrix
 int print(vector<vector<int> > matrix){
     for(int i = 0;i<matrix.size();i++){
         for(int j = 0;j<matrix[i].size();j++){
@@ -91,47 +101,68 @@ int print(vector<vector<int> > matrix){
     return 0;
 }
 
-
+//A* Algorithm[Unsolved Puzzle, Solved instance of the Puzzle]
+//Movement cost -> 1 to max(n,m); where n is no. of rows, and m is no. of columns.
+//Estimated cost to arrive at the solved[goal] state -> manhattan distance
+//total cost = movement cost + estimated cost;
 int astar(vector<vector<int> > start, vector<vector<int> > target){
+    //Sort the nodes by its manhattan distance, 
     set<pair<int, vector<vector<int> > > >  nodes;
-       int rows = target.size(), columns = target[0].size();
-    nodes.insert(make_pair(manhattan_distance(start,target),start));
-    vector<int> distx, disty ;
-    for(int i = 1;i<max(rows,columns);i++){
+    int rows = target.size(), columns = target[0].size();
+    nodes.insert(make_pair(calculate_distance(start,target),start));
+    vector<int> distx, disty;
+    //distx = [0,0,-1,1,0,0,-2,2....] disty = [1,-1,0,0,-2,2,0,0];
+    //Why are we using distx, disty? 
+    //Explanation -> let the position of the empty block be (x,y)
+    //For the sake of simplicity, assume the empty block can move only in 1 Dimension[Either Row or Column]
+    //then, (x,y) can be -> (x+1,y) (x+2,y)...(n,y) (or) (x,y+1), (x,y+2) .... (x,m) (or) (x-1,y) (x-2,y) .... (0,y) (or) (x,y-1)..(x,0);
+    // we observe that only one coordinate can change at a time, while the other coordinate remains constant. 
+    //that is, new_x = x + distx[i]; new_y = y + disty[i]; if distx[i]!=0 then disty[i] = 0, vice versa
+    for(int i = 1;i<max(rows,columns);i++){ //Fancier way of writing distx = [0,0,-1,1,0,0,-2,2....] disty = [1,-1,0,0,-2,2,0,0];
         for(int j = 0;j<4;j++){ 
             if(j<2){ distx.push_back(0); disty.push_back(i*(-1 + 2*(j%2==0)));}
             else{disty.push_back(0); distx.push_back(i*(-1 + 2*(j%2==0))); }
         }
     }
-    
+    //This map is not necessary, it is just used to check if 0<=new_x<n && 0<=new_y<m [Basically, reduces bunch of If and else statements]
     map<position,bool,compare_pos> allowed;
     for(int i = 0;i<rows;i++) for(int j = 0;j<columns;j++) allowed[ret_pos(i,j)] = true;
-  
-    if(manhattan_distance(start,target)==0) return 1;
+
+    //if start == target, that is, if the puzzle is already solved, we just return 1;
+    if(calculate_distance(start,target)==0) return 1;
     while(!nodes.empty()){
-        while(visited[nodes.begin()->second]&&!nodes.empty()) nodes.erase(nodes.begin());
-        vector<vector<int> > temp = nodes.begin()->second;
-        nodes.erase(nodes.begin());
+       //nodes.begin()->first points to manhattan distance
+       //nodes.begin()->second points to a matrix.
+        vector<vector<int> > temp = nodes.begin()->second; //Gets the matrix with the smallest manhattan distance
+        nodes.erase(nodes.begin()); //Since we are expanding the matrix, we will not require it again. 
+       //Get the position of the empty cell 
         position you = get_currentpos(temp);
+       //Mark the matrix[state] as visited, as you should not visit the same node/state again.
         visited[temp] = true;
+       //store all the possible states 
         for(int d = 0;d<distx.size();d++){
             position change;
             change.x = you.x + distx[d];
             change.y = you.y + disty[d];
+            // check if 0<=change.x<n && 0<=change.y<m
             if(!allowed[change]) continue; 
+            // if it conforms to the constraints, we get the modified matrix;
             vector<vector<int> > new_move = move(temp,you,change);
+            //check if the matrix has already been visited, if yes, do not insert, else insert the node/state into the set (manhattan_distance,matrix)
             if(visited[new_move]) continue;
-        
-            nodes.insert(make_pair(manhattan_distance(new_move,target)+max(abs(distx[d]),abs(disty[d])),new_move));
+            nodes.insert(make_pair(calculate_distance(new_move,target)+max(abs(distx[d]),abs(disty[d])),new_move));
             parent[new_move] = temp;
-            if(manhattan_distance(new_move,target)==0){
+            //check if the new matrix/state is solved or not, if solved return 1;
+            if(calculate_distance(new_move,target)==0){
                 return 1;
             }
         }
     }
-
+    //if solution is not found after exhausting all the possible options, return 0;
     return 0;
 }
+//check if two matrices are equal or not
+//Note: Check can be replaced with manhattan_distance, as manhattan_distance of two equal matrices will be zero
 bool check(vector<vector<int> > a, vector<vector<int> > b){
     for(int i = 0;i<a.size();i++){
         for(int j = 0;j<a[i].size();j++){
@@ -140,14 +171,15 @@ bool check(vector<vector<int> > a, vector<vector<int> > b){
     }
     return 1;
 }
+//if we arrive at the solution, we print all the states that led to the solution, recursively.
 int print_all(vector<vector<int> > start, vector<vector<int> > child){
     if(check(start,child)==1) return 0;
-  
     print_all(start,parent[child]);
     cout << endl;
     print(child);
     return 0;
 }
+//This is to check running time of A* algorithm
 int calculate_time(vector<vector<int> > start, vector<vector<int> > target){
     auto start_time = chrono::high_resolution_clock::now();
     astar(start,target);
@@ -157,6 +189,8 @@ int calculate_time(vector<vector<int> > start, vector<vector<int> > target){
     exit(0);
 }
 int main(){
+    //Start - unsolved Puzzle
+    //Target - solved instance of the Puzzle.
     vector< vector<int> > start, target;
     int n,m;
     cin >> n >> m;
@@ -173,7 +207,7 @@ int main(){
             cin >> target[i][j];
         }
     }
-   //calculate_time(start,target);
+   // calculate_time(start,target);
     if(astar(start,target)==1){
         cout <<"FOUND!";
         print_all(start,target);
